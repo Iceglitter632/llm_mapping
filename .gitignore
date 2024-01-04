@@ -1,0 +1,9 @@
+# ignore dirs
+/data
+/run
+/runs
+/models
+
+# ignore files
+_cache*
+.ipynb_checkpoints
