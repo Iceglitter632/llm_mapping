@@ -25,9 +25,9 @@ def get_config():
 
     # HyperParameters
     parser.add_argument("--batch", default=20, type=int)
-    parser.add_argument("--lr", default=5e-5, type=int)
+    parser.add_argument("--lr", default=5e-5, type=float)
     parser.add_argument("--epoch", default=1, type=int)
-    parser.add_argument("--gamma", default=0.95, type=int, help="discount factor for REINFORCE")
-    parser.add_argument("--decay", default=0.9, type=int, help="how learning rate decays for each epoch")
+    parser.add_argument("--gamma", default=0.95, type=float, help="discount factor for REINFORCE")
+    parser.add_argument("--decay", default=0.9, type=float, help="how learning rate decays for each epoch")
 
     return parser
