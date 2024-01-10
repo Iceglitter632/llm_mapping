@@ -11,8 +11,8 @@ def imshow(img):
 class Dataset:
     def __init__(self, args, image_encoder):
         
-        if(args.exp_type=="image"):
-            print(f"\tDataset at: {args.dataset_path}")
-            self.dataset = datasets.LSUN(root=args.dataset_path, classes=args.dataset_classes, transform=image_encoder.transform)
+        # if(args.exp_type=="image"):
+        print(f"\tDataset at: {args.dataset_path}")
+        self.dataset = datasets.LSUN(root=args.dataset_path, classes=args.dataset_classes, transform=image_encoder.transform)
             
         

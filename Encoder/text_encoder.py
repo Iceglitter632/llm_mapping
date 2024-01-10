@@ -49,7 +49,7 @@ class GPT2:
 
         return predicted_logits
     
-    def find_closest_token(self, batch_feature_vectors):
+    def find_closest_token_cosine(self, batch_feature_vectors):
         """
         Find the LLM token whose embedding is closest to the given feature vector.
 
@@ -77,8 +77,22 @@ class GPT2:
 
         return closest_tokens
     
+    def find_closest_token_logits(self, batch_feature_vectors):
+        """
+        Find the LLM token who has the highest dot product to the given feature vector
+        This acts as the action of our REINFORCE algorithm
+        
+        return prob: Probability of each token getting chosen => shape:(batch_size, seq_len, llm_vocabulary_size)
+        return closest_tokens: The token with the highest probability => shape:(batch_size, seq_len) 
+        """
+        dot_product = torch.matmul(batch_feature_vectors, self.embeddings.T)
+        probs = F.softmax(dot_product, dim=-1)
+        closest_tokens = torch.argmax(probs, dim=-1)
+        
+        return dot_product, closest_tokens
+    
     def get_ground_truth(self, mapped_feature_vector):
     
-        ground_truth = self.find_closest_token(mapped_feature_vector)
-    
-        return ground_truth
+        action_logits, ground_truth = self.find_closest_token_logits(mapped_feature_vector)
+
+        return action_logits, ground_truth

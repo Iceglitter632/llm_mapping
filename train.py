@@ -85,18 +85,18 @@ def main():
 
             # Map tokens and get ground truth from LLM
             mapped_feature_vector = mapper.model(flattened_tokens)
-            ground_truth_tokens = llm.get_ground_truth(mapped_feature_vector).to(device)
+            action_logits, ground_truth_tokens = llm.get_ground_truth(mapped_feature_vector)
             # Calculate Base Loss
             ground_truth_tokens = ground_truth_tokens.reshape(-1)
             # loss = CELoss_SG(mapped_feature_vector, ground_truth_tokens)
             
             # RL Loss
-            rl_loss, prediction_logits = CrossEntropySG_Loss(llm, mapped_feature_vector, ground_truth_tokens, reduction='none')
-            prediction_logits = prediction_logits.reshape(batch_size, -1, llm.vocab_len)
+            ce_loss = CrossEntropySG_Loss(llm, mapped_feature_vector, ground_truth_tokens, reduction='none')
+            # prediction_logits = prediction_logits.reshape(batch_size, -1, llm.vocab_len)
             ground_truth_tokens = ground_truth_tokens.reshape(batch_size, -1)
-            rl_loss = rl_loss.reshape(batch_size, -1)
+            ce_loss = ce_loss.reshape(batch_size, -1)
 
-            loss = Reinforce_Loss(prediction_logits, ground_truth_tokens, rl_loss, gamma=args.gamma)
+            loss = Reinforce_Loss(action_logits, ground_truth_tokens, ce_loss, gamma=args.gamma)
             
             # Backward pass and update
             loss.backward()
@@ -107,7 +107,7 @@ def main():
                 "Training Metrics",
                 {
                     "loss": loss.item(),
-                    "cross_entropy": rl_loss[:,0].mean().item(),
+                    "cross_entropy": ce_loss[:,0].mean().item(),
                 },
                 epoch * len(dataloader) + i
             )
