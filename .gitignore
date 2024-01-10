@@ -7,3 +7,4 @@
 # ignore files
 _cache*
 .ipynb_checkpoints
+__pycache__
