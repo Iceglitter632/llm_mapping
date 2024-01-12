@@ -124,8 +124,8 @@ def main():
                 epoch * len(dataloader) + i
             )
                 
-            if i % 50 == 0:
-                print(f"Epoch {epoch+1}, Batch {i}, Loss: {loss.item()}")
+            # if i % 50 == 0:
+            #     print(f"Epoch {epoch+1}, Batch {i}, Loss: {loss.item()}")
 
         scheduler.step()
         print(f"Epoch {epoch+1}/{args.epoch} completed.")
