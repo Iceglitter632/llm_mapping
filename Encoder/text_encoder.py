@@ -10,10 +10,10 @@ class GPT2:
         self.model = GPT2LMHeadModel.from_pretrained(args.llm)
         self.tokenizer = GPT2Tokenizer.from_pretrained(args.llm)
 
-        self.embeddings = self.model.transformer.wte.weight
+        self.embeddings = self.model.lm_head.weight
         # embedding_matrix = model.transformer.wte.weight
-        self.codebook_len = self.model.config.n_embd
-        self.vocab_len = len(self.embeddings)
+        self.feature_dim = self.model.config.hidden_size
+        self.vocab_len = self.model.config.vocab_size
         
         self.device = args.device
         self.model.to(self.device)
@@ -73,7 +73,7 @@ class GPT2:
             cosine_similarities = torch.matmul(feature_vectors_norm, embedding_matrix_norm.T)
 
             # Find the token with the highest similarity for each feature vector
-            closest_tokens[i] = torch.argmax(cosine_similarities, dim=1)
+            closest_tokens[i] =torch.argmax(cosine_similarities, dim=1)
 
         return closest_tokens
     
@@ -90,6 +90,15 @@ class GPT2:
         closest_tokens = torch.argmax(probs, dim=-1)
         
         return dot_product, closest_tokens
+
+    def generate_next_token_predictions(self, token_sequences):
+        # Get model predictions
+        with torch.no_grad():
+            outputs = self.model(input_ids=token_sequences, output_hidden_states=True)
+        
+        return outputs.hidden_states[-1]
+            
+        
     
     def get_ground_truth(self, mapped_feature_vector):
     

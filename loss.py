@@ -28,8 +28,8 @@ def Reinforce_Loss(logits, targets, loss, gamma=1.0):
     cumulative_loss = discounted_loss.sum(dim=2)
     
     # Calculate loss
-    # total_loss = -torch.sum(log_probs_targets * cumulative_loss) / batch_size / seq_len
-    total_loss = torch.sum(log_probs_targets * cumulative_loss) / batch_size / seq_len
+    total_loss = -torch.sum(log_probs_targets * cumulative_loss) / batch_size / seq_len
+    # total_loss = torch.sum(log_probs_targets * cumulative_loss) / batch_size / seq_len
 
     return total_loss
 
