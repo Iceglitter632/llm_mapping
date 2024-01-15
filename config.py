@@ -18,6 +18,8 @@ def get_config():
     parser.add_argument("--llm", default="gpt2", help="The LLM we are mapping to")
     parser.add_argument("--num_workers", default=4, type=int)
     parser.add_argument("--image_size", default=128, type=int, help="The size of image that encoder takes as input")
+    parser.add_argument("--train_val_split", default=0.8, type=float, help="What percentage of data should be used as training, default=0.8")
+    parser.add_argument('--val', default=False, action='store_true')
 
     # Dataset
     parser.add_argument("--dataset_path", default="./data/lsun", type=pathlib.Path)
