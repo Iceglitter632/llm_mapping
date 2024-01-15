@@ -104,20 +104,20 @@ def main():
 
             # Calculate Base Loss
             # loss = criterion(_logits, ground_truth_tokens)
-            
-            # RL Loss
-            ce_loss = rl_criterion(_logits, ground_truth_tokens)
-            ground_truth_tokens = ground_truth_tokens.reshape(batch_size, -1)
-            ce_loss = ce_loss.reshape(batch_size, -1)
-
-            loss = Reinforce_Loss(action_logits, ground_truth_tokens, ce_loss, gamma=args.gamma)
-            
-            # Backward pass and update
-            loss.backward()
-            optimizer.step()
-
-            # Log the losses
             if 'rl' in args.algo:
+                # RL Loss
+                ce_loss = rl_criterion(_logits, ground_truth_tokens)
+                ground_truth_tokens = ground_truth_tokens.reshape(batch_size, -1)
+                ce_loss = ce_loss.reshape(batch_size, -1)
+
+                loss = Reinforce_Loss(action_logits, ground_truth_tokens, ce_loss, gamma=args.gamma)
+                
+                # Backward pass and update
+                loss.backward()
+                optimizer.step()
+
+                # Log the losses
+            
                 writer.add_scalars(
                     "Training Metrics",
                     {
@@ -127,6 +127,11 @@ def main():
                     epoch * len(trainloader) + i
                 )
             elif 'base' in args.algo:
+                loss = criterion(_logits, ground_truth_tokens)
+                
+                loss.backward()
+                optimizer.step()
+                
                 writer.add_scalar("Training/cross_entropy", loss.item(), epoch*len(trainloader)+i)
                 
             if i % 100 == 0:
@@ -156,19 +161,15 @@ def main():
 
                 action_logits = torch.matmul(final_layer_fv, mapper.model.weight)
                 _logits = action_logits.reshape(-1, image_encoder.vocab_len)
-
-
-                # Calculate Base Loss
-                # loss = criterion(_logits, ground_truth_tokens)
-                
-                ce_loss = rl_criterion(_logits, ground_truth_tokens)
-                prediction_logits = prediction_logits.reshape(batch_size, -1, llm.vocab_len)
-                ground_truth_tokens = ground_truth_tokens.reshape(batch_size, -1)
-                ce_loss = ce_loss.reshape(batch_size, -1)
-
-                loss = Reinforce_Loss(action_logits, ground_truth_tokens, ce_loss, gamma=args.gamma)
-                
+      
                 if 'rl' in args.algo:
+                    ce_loss = rl_criterion(_logits, ground_truth_tokens)
+                    prediction_logits = prediction_logits.reshape(batch_size, -1, llm.vocab_len)
+                    ground_truth_tokens = ground_truth_tokens.reshape(batch_size, -1)
+                    ce_loss = ce_loss.reshape(batch_size, -1)
+
+                    loss = Reinforce_Loss(action_logits, ground_truth_tokens, ce_loss, gamma=args.gamma)
+                    
                     writer.add_scalars(
                         "Validation Metrics",
                         {
@@ -179,6 +180,7 @@ def main():
                     )
                 
                 elif 'base' in args.algo:
+                    loss = criterion(_logits, ground_truth_tokens)
                     writer.add_scalar("Validation/cross_entropy", loss.item(), epoch*len(valloader)+i)
 
         scheduler.step()
