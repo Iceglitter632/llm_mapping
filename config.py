@@ -12,6 +12,7 @@ def get_config():
     parser.add_argument("--device", default="cuda:0")
 
     # Experiment Settings
+    parser.add_argument("--name", default="none", type=str)
     parser.add_argument("--algo", default="rl", help="the algorithm used for training")
     parser.add_argument("--image_encoder", default="dalle")
     parser.add_argument("--exp_type", default="image", help="which modality is used. [Image, Music, Pose, Video]")

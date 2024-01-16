@@ -27,7 +27,10 @@ def main():
     print(f"          MAPPING FROM {args.image_encoder} ({args.exp_type}) TO {args.llm}")
     print("===============================================================")
     
-    experiment_name = f"{args.exp_type}/{args.algo}/model={args.llm}_lr={args.lr}"
+    if args.name != "none":
+        experiment_name = f"{args.exp_type}/{args.algo}/{args.name}/model={args.llm}_lr={args.lr}"
+    else:
+        experiment_name = f"{args.exp_type}/{args.algo}/model={args.llm}_lr={args.lr}"
     
     writer = SummaryWriter(log_dir = f'runs/{experiment_name}')
     
@@ -85,9 +88,8 @@ def main():
             # images = images.permute(0, 2, 3, 1)
             
             # Process each image through DALL-E encoder to get image tokens
-            image_token_logits = image_encoder.encode(images)
-            ground_truth_tokens = torch.argmax(image_token_logits, dim=1)
-            one_hot_image_tokens = F.one_hot(ground_truth_tokens, num_classes=image_encoder.vocab_len).permute(0,3,1,2).float()
+            ground_truth_tokens = image_encoder.get_ground_truth(images)
+            one_hot_image_tokens = image_encoder.get_onehot(ground_truth_tokens)
     
             ground_truth_tokens = ground_truth_tokens.reshape(-1)
             flattened_tokens = one_hot_image_tokens.reshape(one_hot_image_tokens.size(0), -1, image_encoder.vocab_len)
@@ -98,30 +100,39 @@ def main():
 
             final_layer_fv = llm.generate_next_token_predictions(translated_text_tokens)
 
-            action_logits = torch.matmul(final_layer_fv, mapper.model.weight)
-            _logits = action_logits.reshape(-1, image_encoder.vocab_len)
+            logits = torch.matmul(final_layer_fv, mapper.model.weight)
+            _logits = logits.reshape(-1, image_encoder.vocab_len)
 
+            action_logits = torch.matmul(mapped_feature_vector, llm.embeddings.T)
 
             # Calculate Base Loss
             # loss = criterion(_logits, ground_truth_tokens)
             if 'rl' in args.algo:
                 # RL Loss
-                ce_loss = rl_criterion(_logits, ground_truth_tokens)
+                loss = criterion(_logits, ground_truth_tokens)
+                
+                with torch.no_grad():
+                    ce_loss = rl_criterion(_logits, ground_truth_tokens)
+                
                 ground_truth_tokens = ground_truth_tokens.reshape(batch_size, -1)
                 ce_loss = ce_loss.reshape(batch_size, -1)
 
-                loss = Reinforce_Loss(action_logits, ground_truth_tokens, ce_loss, gamma=args.gamma)
-                
-                # Backward pass and update
                 loss.backward()
                 optimizer.step()
 
+                loss = Reinforce_Loss(action_logits, translated_text_tokens, ce_loss, gamma=args.gamma, device=args.device)
+                
+                loss.backward()
+                optimizer.step()
+
+                # Backward pass and update
+                
                 # Log the losses
             
                 writer.add_scalars(
-                    "Training Metrics",
+                    "Training",
                     {
-                        "loss": loss.item(),
+                        "reinforce_loss": loss.item(),
                         "cross_entropy": ce_loss.mean().item(),
                     },
                     epoch * len(trainloader) + i

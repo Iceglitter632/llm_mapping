@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 
-def Reinforce_Loss(logits, targets, loss, gamma=1.0):
+def Reinforce_Loss(logits, targets, loss, gamma=1.0, device="cpu"):
     """
     Calculate the REINFORCE loss for sequence prediction.
 
@@ -11,7 +11,6 @@ def Reinforce_Loss(logits, targets, loss, gamma=1.0):
     :param gamma: Discount factor for future rewards.
     :return: The REINFORCE loss (to be maximized).
     """
-    
     batch_size, seq_len, _ = logits.shape
 
     # return loss / seq_len
@@ -19,8 +18,12 @@ def Reinforce_Loss(logits, targets, loss, gamma=1.0):
     log_probs_targets = log_probs.gather(2, targets.unsqueeze(2)).squeeze(2)
 
     # Create a discount matrix
-    discounts = gamma ** torch.arange(seq_len).float().unsqueeze(0).to(log_probs.device)
-    discount_matrix = torch.tril(discounts.repeat(seq_len, 1).T).T
+    discount_matrix = torch.zeros((seq_len, seq_len)).to(device)
+
+    # Fill the matrix according to the given pattern
+    for i in range(seq_len):
+        for j in range(i, seq_len):
+            discount_matrix[i, j] = gamma ** (j - i)
 
 
     # Calculate discounted rewards
@@ -28,8 +31,8 @@ def Reinforce_Loss(logits, targets, loss, gamma=1.0):
     cumulative_loss = discounted_loss.sum(dim=2)
     
     # Calculate loss
-    total_loss = -torch.sum(log_probs_targets * cumulative_loss) / batch_size / seq_len
-    # total_loss = torch.sum(log_probs_targets * cumulative_loss) / batch_size / seq_len
+    # total_loss = -torch.sum(log_probs_targets * cumulative_loss) / batch_size / seq_len
+    total_loss = torch.sum(log_probs_targets * cumulative_loss) / batch_size / seq_len
 
     return total_loss
 
