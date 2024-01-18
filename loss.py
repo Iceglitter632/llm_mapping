@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 
-def Reinforce_Loss(logits, targets, loss, gamma=1.0, device="cpu"):
+def Reinforce_Loss(logits, targets, loss, gamma=1.0, alpha=1, device="cpu"):
     """
     Calculate the REINFORCE loss for sequence prediction.
 
@@ -24,16 +24,17 @@ def Reinforce_Loss(logits, targets, loss, gamma=1.0, device="cpu"):
     for i in range(seq_len):
         for j in range(i, seq_len):
             discount_matrix[i, j] = gamma ** (j - i)
-
+    
+    normalize_factor = discount_matrix.sum(dim=1)
 
     # Calculate discounted rewards
     discounted_loss = loss.unsqueeze(1) * discount_matrix
-    cumulative_loss = discounted_loss.sum(dim=2)
+    cumulative_loss = discounted_loss.sum(dim=2) / normalize_factor
     
     # Calculate loss
-    total_loss = -torch.sum(log_probs_targets * cumulative_loss) / batch_size / seq_len
-    # total_loss = torch.sum(log_probs_targets * cumulative_loss) / batch_size / seq_len
-
+    # total_loss = -torch.sum(log_probs_targets * cumulative_loss) / batch_size / seq_len / alpha
+    total_loss = torch.sum(log_probs_targets * cumulative_loss.detach()) / batch_size / seq_len / alpha
+    
     return total_loss
 
 def CrossEntropySG_Loss(llm, mapped_feature_vector, targets, reduction='mean'):

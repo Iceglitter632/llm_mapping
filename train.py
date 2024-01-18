@@ -14,12 +14,11 @@ from loss import Reinforce_Loss, CrossEntropySG_Loss
 from Mapper.mapper import TokenMapper
 from Encoder.text_encoder import GPT2
 from Encoder.dalle_encoder import DalleEncoder
+from Encoder.vqgan_encoder import VQGanEncoder
 
 
 
-def main():
-    parser = get_config()
-    args = parser.parse_args()
+def main(args):
     device = args.device
     batch_size = args.batch
     
@@ -42,6 +41,8 @@ def main():
     
     if args.image_encoder == "dalle":
         image_encoder = DalleEncoder(args)
+    elif args.image_encoder == "vqgan":
+        image_encoder = VQGanEncoder(args)
     
     mapper = TokenMapper(image_encoder.vocab_len, llm.feature_dim, args)
     
@@ -76,22 +77,18 @@ def main():
             {}
     )
 
-    # def train_on_lsun(dataloader, epochs=2):
     for epoch in range(args.epoch):
         
         mapper.train()
         for i, (images, _) in enumerate(trainloader):
             
             optimizer.zero_grad()
-
-            # for vqgan
-            # images = images.permute(0, 2, 3, 1)
             
             # Process each image through DALL-E encoder to get image tokens
             ground_truth_tokens = image_encoder.get_ground_truth(images)
             one_hot_image_tokens = image_encoder.get_onehot(ground_truth_tokens)
     
-            ground_truth_tokens = ground_truth_tokens.reshape(-1)
+            ground_truth_tokens = ground_truth_tokens[:,1:].reshape(-1)
             flattened_tokens = one_hot_image_tokens.reshape(one_hot_image_tokens.size(0), -1, image_encoder.vocab_len)
 
             # Map tokens and get ground truth from LLM
@@ -101,34 +98,34 @@ def main():
             final_layer_fv = llm.generate_next_token_predictions(translated_text_tokens)
 
             logits = torch.matmul(final_layer_fv, mapper.model.weight)
-            _logits = logits.reshape(-1, image_encoder.vocab_len)
+            _logits = logits[:,:-1].reshape(-1, image_encoder.vocab_len)
+            
+            loss = criterion(_logits, ground_truth_tokens)
 
-            action_logits = torch.matmul(mapped_feature_vector, llm.embeddings.T)
+            loss.backward()
+            optimizer.step()
 
-            # Calculate Base Loss
-            # loss = criterion(_logits, ground_truth_tokens)
-            if 'rl' in args.algo:
-                # RL Loss
-                loss = criterion(_logits, ground_truth_tokens)
-                
+            if 'base' in args.algo:
+                writer.add_scalar("Training/cross_entropy", loss.item(), epoch*len(trainloader)+i)
+            
+            elif 'rl' in args.algo:
+                mapped_feature_vector = mapper.model(flattened_tokens)
+                action_logits = torch.matmul(mapped_feature_vector, llm.embeddings.T)
+                if args.action == "before":
+                    action_logits = action_logits[:,:-1]
+                    translated_text_tokens = translated_text_tokens[:,:-1]
                 with torch.no_grad():
                     ce_loss = rl_criterion(_logits, ground_truth_tokens)
-                
-                ground_truth_tokens = ground_truth_tokens.reshape(batch_size, -1)
+                # ground_truth_tokens = ground_truth_tokens.reshape(batch_size, -1)
                 ce_loss = ce_loss.reshape(batch_size, -1)
 
-                loss.backward()
-                optimizer.step()
-
-                loss = Reinforce_Loss(action_logits, translated_text_tokens, ce_loss, gamma=args.gamma, device=args.device)
+                # loss = Reinforce_Loss(action_logits[1:], translated_text_tokens[1:], ce_loss, gamma=args.gamma, alpha=args.alpha, device=args.device)
+                loss = Reinforce_Loss(action_logits, translated_text_tokens, ce_loss, gamma=args.gamma, alpha=args.alpha, device=args.device)
                 
                 loss.backward()
                 optimizer.step()
-
-                # Backward pass and update
                 
                 # Log the losses
-            
                 writer.add_scalars(
                     "Training",
                     {
@@ -137,62 +134,9 @@ def main():
                     },
                     epoch * len(trainloader) + i
                 )
-            elif 'base' in args.algo:
-                loss = criterion(_logits, ground_truth_tokens)
-                
-                loss.backward()
-                optimizer.step()
-                
-                writer.add_scalar("Training/cross_entropy", loss.item(), epoch*len(trainloader)+i)
-                
+            
             if i % 100 == 0:
                 print(f"Epoch {epoch+1}, Batch {i}, Loss: {loss.item()}")
-
-        
-        if args.val:
-            mapper.eval()
-            for i, (images, _) in enumerate(valloader):
-
-                # for vqgan
-                # images = images.permute(0, 2, 3, 1)
-                
-                # Process each image through DALL-E encoder to get image tokens
-                image_token_logits = image_encoder.encode(images)
-                ground_truth_tokens = torch.argmax(image_token_logits, dim=1)
-                one_hot_image_tokens = F.one_hot(ground_truth_tokens, num_classes=image_encoder.vocab_len).permute(0,3,1,2).float()
-        
-                ground_truth_tokens = ground_truth_tokens.reshape(-1)
-                flattened_tokens = one_hot_image_tokens.reshape(one_hot_image_tokens.size(0), -1, image_encoder.vocab_len)
-
-                # Map tokens and get ground truth from LLM
-                mapped_feature_vector = mapper.model(flattened_tokens)
-                translated_text_tokens = image_encoder.translate(mapped_feature_vector, llm.embeddings)
-
-                final_layer_fv = llm.generate_next_token_predictions(translated_text_tokens)
-
-                action_logits = torch.matmul(final_layer_fv, mapper.model.weight)
-                _logits = action_logits.reshape(-1, image_encoder.vocab_len)
-      
-                if 'rl' in args.algo:
-                    ce_loss = rl_criterion(_logits, ground_truth_tokens)
-                    prediction_logits = prediction_logits.reshape(batch_size, -1, llm.vocab_len)
-                    ground_truth_tokens = ground_truth_tokens.reshape(batch_size, -1)
-                    ce_loss = ce_loss.reshape(batch_size, -1)
-
-                    loss = Reinforce_Loss(action_logits, ground_truth_tokens, ce_loss, gamma=args.gamma)
-                    
-                    writer.add_scalars(
-                        "Validation Metrics",
-                        {
-                            "loss": loss.item(),
-                            "cross_entropy": ce_loss.mean().item(),
-                        },
-                        epoch * len(valloader) + i
-                    )
-                
-                elif 'base' in args.algo:
-                    loss = criterion(_logits, ground_truth_tokens)
-                    writer.add_scalar("Validation/cross_entropy", loss.item(), epoch*len(valloader)+i)
 
         scheduler.step()
         print(f"Epoch {epoch+1}/{args.epoch} completed.")
@@ -203,6 +147,11 @@ def main():
 
 
 if __name__=="__main__":
-    main()
+    parser = get_config()
+    args = parser.parse_args()
     
+    if args.use_seed:
+        torch.manual_seed(args.seed)
+        
+    main(args)
     

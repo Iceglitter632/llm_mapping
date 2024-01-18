@@ -18,13 +18,18 @@ def get_config():
     parser.add_argument("--exp_type", default="image", help="which modality is used. [Image, Music, Pose, Video]")
     parser.add_argument("--llm", default="gpt2", help="The LLM we are mapping to")
     parser.add_argument("--num_workers", default=4, type=int)
-    parser.add_argument("--image_size", default=128, type=int, help="The size of image that encoder takes as input")
+    parser.add_argument("--image_size", default=256, type=int, help="The size of image that encoder takes as input")
     parser.add_argument("--train_val_split", default=0.8, type=float, help="What percentage of data should be used as training, default=0.8")
-    parser.add_argument('--val', default=False, action='store_true')
+    parser.add_argument("--val", default=False, action='store_true')
+    parser.add_argument("--action", default="before", type=str, help="Decide whether or not we think the action happens before LLM prediction or after")
 
     # Dataset
     parser.add_argument("--dataset_path", default="./data/lsun", type=pathlib.Path)
     parser.add_argument('--dataset_classes', nargs='+', help='List of LSUN datasets', default=['living_room_train'])
+
+    # Reproductivity
+    parser.add_argument("--use_seed", default=False, action="store_true")
+    parser.add_argument("--seed", default=42, type=int)
 
     # HyperParameters
     parser.add_argument("--batch", default=20, type=int)
@@ -32,5 +37,6 @@ def get_config():
     parser.add_argument("--epoch", default=1, type=int)
     parser.add_argument("--gamma", default=0.95, type=float, help="discount factor for REINFORCE")
     parser.add_argument("--decay", default=0.9, type=float, help="how learning rate decays for each epoch")
+    parser.add_argument("--alpha", default=1.0, type=int, help="how many times I want to scale down RL Loss")
 
     return parser
