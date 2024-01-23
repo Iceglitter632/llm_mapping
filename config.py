@@ -21,7 +21,8 @@ def get_config():
     parser.add_argument("--image_size", default=256, type=int, help="The size of image that encoder takes as input")
     parser.add_argument("--train_val_split", default=0.8, type=float, help="What percentage of data should be used as training, default=0.8")
     parser.add_argument("--val", default=False, action='store_true')
-    parser.add_argument("--action", default="before", type=str, help="Decide whether or not we think the action happens before LLM prediction or after")
+    
+    # parser.add_argument("--action", default="before", type=str, help="Decide whether or not we think the action happens before LLM prediction or after")
 
     # Dataset
     parser.add_argument("--dataset_path", default="./data/lsun", type=pathlib.Path)
@@ -38,5 +39,6 @@ def get_config():
     parser.add_argument("--gamma", default=0.95, type=float, help="discount factor for REINFORCE")
     parser.add_argument("--decay", default=0.9, type=float, help="how learning rate decays for each epoch")
     parser.add_argument("--alpha", default=1.0, type=int, help="how many times I want to scale down RL Loss")
+    parser.add_argument("--temperature", default=1.0, type=float, help="the lower the temperature, the more the logits looks like a one-hot. Range: (0, 1]")
 
     return parser

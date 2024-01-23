@@ -26,6 +26,8 @@ def main(args):
     print(f"          MAPPING FROM {args.image_encoder} ({args.exp_type}) TO {args.llm}")
     print("===============================================================")
     
+    print(args.name)
+    
     if args.name != "none":
         experiment_name = f"{args.exp_type}/{args.algo}/{args.name}/model={args.llm}_lr={args.lr}"
     else:
@@ -64,7 +66,7 @@ def main(args):
     
     optimizer = optim.Adam(mapper.model.parameters(), lr=args.lr)
     scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=args.decay)
-    criterion = nn.CrossEntropyLoss()
+    ce_criterion = nn.CrossEntropyLoss()
     rl_criterion = nn.CrossEntropyLoss(reduction='none')
             
     writer.add_hparams(
@@ -76,6 +78,22 @@ def main(args):
             },
             {}
     )
+    
+    '''
+    為了加速寫的 之後可以拿掉
+    '''
+    seq_len = 255
+    discount_matrix = torch.zeros((seq_len, seq_len)).to(device)
+    # Fill the matrix according to the given pattern
+    for i in range(seq_len):
+        for j in range(i, seq_len):
+            discount_matrix[i, j] = args.gamma ** (j - i)
+    
+    normalize_factor = discount_matrix.sum(dim=1)
+
+    '''
+    為了加速寫的 之後可以拿掉
+    '''
 
     for epoch in range(args.epoch):
         
@@ -89,47 +107,61 @@ def main(args):
             one_hot_image_tokens = image_encoder.get_onehot(ground_truth_tokens)
     
             ground_truth_tokens = ground_truth_tokens[:,1:].reshape(-1)
-            flattened_tokens = one_hot_image_tokens.reshape(one_hot_image_tokens.size(0), -1, image_encoder.vocab_len)
+            one_hot_image_tokens = one_hot_image_tokens.reshape(one_hot_image_tokens.size(0), -1, image_encoder.vocab_len)
 
             # Map tokens and get ground truth from LLM
-            mapped_feature_vector = mapper.model(flattened_tokens)
-            translated_text_tokens = image_encoder.translate(mapped_feature_vector, llm.embeddings)
+            mapped_feature_vector = mapper.model(one_hot_image_tokens)
+            translated_feature_vector, translated_logits, translated_text_tokens = image_encoder.translate(
+                mapped_feature_vector, llm.embeddings, temperature=args.temperature
+            )
 
-            final_layer_fv = llm.generate_next_token_predictions(translated_text_tokens)
+            final_layer_fv = llm.generate_next_token_predictions_withfv(translated_text_tokens)
 
-            logits = torch.matmul(final_layer_fv, mapper.model.weight)
+            final_layer_fv = F.normalize(final_layer_fv, dim=-1)
+            mapper_embeds = F.normalize(mapper.model.weight, dim=0)
+            logits = torch.matmul(final_layer_fv, mapper_embeds)
             _logits = logits[:,:-1].reshape(-1, image_encoder.vocab_len)
             
-            loss = criterion(_logits, ground_truth_tokens)
-
-            loss.backward()
+            ce_loss = ce_criterion(_logits, ground_truth_tokens)
+            ce_loss.backward()
             optimizer.step()
 
             if 'base' in args.algo:
                 writer.add_scalar("Training/cross_entropy", loss.item(), epoch*len(trainloader)+i)
             
             elif 'rl' in args.algo:
+                optimizer.zero_grad()
                 mapped_feature_vector = mapper.model(flattened_tokens)
-                action_logits = torch.matmul(mapped_feature_vector, llm.embeddings.T)
-                if args.action == "before":
-                    action_logits = action_logits[:,:-1]
-                    translated_text_tokens = translated_text_tokens[:,:-1]
+                # action_logits = torch.matmul(mapped_feature_vector, llm.embeddings.T)
+                translated_feature_vector, translated_logits, translated_text_tokens = image_encoder.translate(
+                    mapped_feature_vector, llm.embeddings.detach(), temperature=args.temperature
+                )
+                cloned_mapper_weight = mapper.model.weight.clone().detach()
+                
                 with torch.no_grad():
+                    final_layer_fv = generate_next_token_predictions_withfv(translated_feature_vector)
+                    final_layer_fv = F.normalize(final_layer_fv, dim=-1)
+                    cloned_mapper_weight = F.normalize(cloned_mapper_weight, dim=0)
+                    logits = torch.matmul(final_layer_fv, cloned_mapper_weight)
+                    logits = logits[:,:-1]
+                    _logits = logits.reshape(-1, image_encoder.vocab_len)
                     ce_loss = rl_criterion(_logits, ground_truth_tokens)
-                # ground_truth_tokens = ground_truth_tokens.reshape(batch_size, -1)
-                ce_loss = ce_loss.reshape(batch_size, -1)
+                    ce_loss = ce_loss.reshape(-1, logits.size(1))
 
                 # loss = Reinforce_Loss(action_logits[1:], translated_text_tokens[1:], ce_loss, gamma=args.gamma, alpha=args.alpha, device=args.device)
-                loss = Reinforce_Loss(action_logits, translated_text_tokens, ce_loss, gamma=args.gamma, alpha=args.alpha, device=args.device)
+                rl_loss = Reinforce_Loss(
+                    translated_logits[:,1:], translated_text_tokens[:,1:].detach(), ce_loss, discount_matrix, normalize_factor, 
+                    gamma=args.gamma, alpha=args.alpha, temperature=args.temperature, device=args.device
+                )
                 
-                loss.backward()
+                rl_loss.backward()
                 optimizer.step()
                 
                 # Log the losses
                 writer.add_scalars(
                     "Training",
                     {
-                        "reinforce_loss": loss.item(),
+                        "reinforce_loss": rl_loss.item(),
                         "cross_entropy": ce_loss.mean().item(),
                     },
                     epoch * len(trainloader) + i

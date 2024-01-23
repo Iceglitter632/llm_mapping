@@ -17,6 +17,9 @@ class GPT2:
         
         self.device = args.device
         self.model.to(self.device)
+        
+        for param in self.model.parameters():
+            param.requires_grad = False
     
     def forward_with_embeddings(self, embeddings):
         """
@@ -93,13 +96,16 @@ class GPT2:
 
     def generate_next_token_predictions(self, token_sequences):
         # Get model predictions
-        with torch.no_grad():
-            outputs = self.model(input_ids=token_sequences, output_hidden_states=True)
+        outputs = self.model(input_ids=token_sequences, output_hidden_states=True)
         
         return outputs.hidden_states[-1]
             
-        
+    def generate_next_token_predictions_withfv(self, token_fv):
     
+        outputs = self.model(inputs_embeds=token_fv, output_hidden_states=True)
+    
+        return outputs.hidden_states[-1]
+        
     def get_ground_truth(self, mapped_feature_vector):
     
         action_logits, ground_truth = self.find_closest_token_logits(mapped_feature_vector)
