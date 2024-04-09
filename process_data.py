@@ -23,3 +23,11 @@ class Dataset:
         val_len = self.dataset_len - train_len
         self.train_dataset, self.val_dataset = random_split(self.dataset, [train_len, val_len])
         
+
+class MusicDataset:
+    def __init__(self, args, encoder):
+        pass
+    
+    def split_dataset(self):
+        pass
+        

@@ -117,8 +117,9 @@ def main(args):
 
             final_layer_fv = llm.generate_next_token_predictions_withfv(translated_text_tokens)
 
-            final_layer_fv = F.normalize(final_layer_fv, dim=-1)
-            mapper_embeds = F.normalize(mapper.model.weight, dim=0)
+            # final_layer_fv = F.normalize(final_layer_fv, dim=-1)
+            # mapper_embeds = F.normalize(mapper.model.weight, dim=0)
+            mapper_embeds = mapper.model.weight
             logits = torch.matmul(final_layer_fv, mapper_embeds)
             _logits = logits[:,:-1].reshape(-1, image_encoder.vocab_len)
             
