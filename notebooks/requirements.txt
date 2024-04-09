@@ -1,0 +1,14 @@
+DALL_E==0.1
+datasets==2.16.1
+ipython==8.16.1
+matplotlib==3.8.0
+miditok==3.0.2
+miditoolkit==1.0.1
+numpy==1.26.4
+Pillow==10.0.1
+Pillow==10.3.0
+Requests==2.31.0
+torch==2.1.0
+torchvision==0.16.0
+transformers==4.39.3
+vqgan_jax==0.0.1
